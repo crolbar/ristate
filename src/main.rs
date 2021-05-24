@@ -41,8 +41,8 @@ fn main() {
 
     let mut args = std::env::args();
     let mut monitor = None;
-    let mut show_tags = false;
-    let mut view_tags = false;
+    let mut enable_tag = false;
+    let mut enable_views_tag = true;
     args.next();
     loop {
         match args.next() {
@@ -51,8 +51,8 @@ fn main() {
                     Ok(i) => Some(i),
                     Err(_) => None,
                 },
-                "--tag" | "-t" => show_tags = true,
-                "--view-tags" | "-vt" => view_tags = true,
+                "--tag" | "-t" => enable_tag = true,
+                "--view-tags" | "-vt" => enable_views_tag = true,
                 "--help" | "-h" | "--h" => {
                     println!("Usage: status [option]\n");
                     println!("  --tag | -t : displays the focused tag");
@@ -109,22 +109,19 @@ fn main() {
                 .get_river_output_status(&output.output));
             output.output_status.as_mut().unwrap().quick_assign(move |_, event, _| match event {
                 zriver_output_status_v1::Event::FocusedTags { tags } => {
-                    if show_tags {
+                    if enable_tag {
                         base10(tags);
                         println!("");
                     }
                 }
                 zriver_output_status_v1::Event::ViewTags { tags } => {
-                    if view_tags {
-                        let mut tagmask:u32 = 1;
-                        for (i, tag) in tags.iter().enumerate() {
-                            if *tag != 0 {
-                                tagmask *= *tag as u32;
-                            }
-                            if (i+1) % 4 == 0 {
-                                base10(tagmask);
-                                tagmask = 1;
-                            }
+                    if enable_views_tag {
+                        let len = tags.len();
+                        let mut i = 0;
+                        while i < len {
+                            let buf: [u8; 4] = [tags[i],tags[i+1],tags[i+2],tags[i+3]];
+                            base10(u32::from_le_bytes(buf));
+                            i+=4;
                         }
                         println!("");
                     }
