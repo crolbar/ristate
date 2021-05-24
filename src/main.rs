@@ -42,7 +42,7 @@ fn main() {
     let mut args = std::env::args();
     let mut monitor = None;
     let mut enable_tag = false;
-    let mut enable_views_tag = true;
+    let mut enable_views_tag = false;
     args.next();
     loop {
         match args.next() {

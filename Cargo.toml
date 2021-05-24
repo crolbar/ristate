@@ -1,5 +1,5 @@
 [package]
-name = "status"
+name = "ristate"
 version = "0.1.0"
 authors = ["Bryan Ndjeutcha <ndjeutcha@gmail.com>"]
 edition = "2018"
