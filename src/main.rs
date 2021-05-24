@@ -9,24 +9,8 @@ use crate::wayland::river_status_unstable_v1::zriver_output_status_v1;
 use wayland_client::{Display, GlobalManager, Main};
 
 struct Globals {
-    outputs: Vec<Output>,
+    outputs: Vec<WlOutput>,
     status_manager: Option<Main<ZriverStatusManagerV1>>
-}
-
-struct Output {
-    pub name: String,
-    pub output: WlOutput,
-    pub output_status: Option<Main<ZriverOutputStatusV1>>
-}
-
-impl Output {
-    pub fn new(output:WlOutput)->Output {
-        { Output {
-            name: String::new(),
-            output: output,
-            output_status: None,
-        } }
-    }
 }
 
 fn main() {
@@ -83,8 +67,7 @@ fn main() {
                 3,
                 |output: Main<WlOutput>, mut globals: DispatchData| {
                     output.quick_assign(move |_, _, _| {});
-                    let output = Output::new(output.detach());
-                    globals.get::<Globals>().unwrap().outputs.push(output);
+                    globals.get::<Globals>().unwrap().outputs.push(output.detach());
                 }
             ]
         ),
@@ -103,11 +86,11 @@ fn main() {
             None => assign = true
         }
         if assign {
-            output.output_status = Some(globals.status_manager
+            let output_status = globals.status_manager
                 .as_ref()
                 .expect("Compositor doesn't implement river_status_unstable_v1")
-                .get_river_output_status(&output.output));
-            output.output_status.as_mut().unwrap().quick_assign(move |_, event, _| match event {
+                .get_river_output_status(&output);
+            output_status.quick_assign(move |_, event, _| match event {
                 zriver_output_status_v1::Event::FocusedTags { tags } => {
                     if enable_tag {
                         base10(tags);
