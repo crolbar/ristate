@@ -3,7 +3,11 @@ mod wayland;
 use crate::wayland::river_status_unstable_v1::{
     zriver_output_status_v1, zriver_seat_status_v1, zriver_status_manager_v1::ZriverStatusManagerV1,
 };
-use wayland_client::protocol::{wl_output::WlOutput, wl_seat::WlSeat};
+use wayland_client::protocol::{
+    wl_output::WlOutput,
+    wl_seat::WlSeat,
+    wl_seat::Event
+};
 use wayland_client::{Display, GlobalManager, Main};
 
 struct Globals {
@@ -26,8 +30,8 @@ fn main() {
     };
 
     let mut args = std::env::args();
-    let mut seat = None;
     let mut monitor = None;
+    let mut seat_name = String::new();
     let mut enable_tag = false;
     let mut enable_title = false;
     let mut enable_views_tag = false;
@@ -35,12 +39,7 @@ fn main() {
     loop {
         match args.next() {
             Some(flag) => match flag.as_str() {
-                "--seat" | "-s" => {
-                    seat = match args.next().unwrap_or(String::new()).parse::<usize>() {
-                        Ok(i) => Some(i),
-                        Err(_) => None,
-                    }
-                }
+                "--seat" | "-s" => seat_name = args.next().unwrap_or(String::new()),
                 "--monitor" | "-m" => {
                     monitor = match args.next().unwrap_or(String::new()).parse::<usize>() {
                         Ok(i) => Some(i),
@@ -53,9 +52,10 @@ fn main() {
                 "--help" | "-h" | "--h" => {
                     println!("Usage: status [option]\n");
                     println!("  --monitor | -m <uint> : select the monitor");
+                    println!("  --seat | -s <string> : select the seat");
                     println!("  --tag | -t : displays the focused tag");
-                    println!("  --window-title | -w : displays the title of the focused view");
                     println!("  --view-tags | -vt : displays the tag of all views");
+                    println!("  --window-title | -w : displays the title of the focused view");
                     std::process::exit(0);
                 }
                 _ => break,
@@ -80,7 +80,6 @@ fn main() {
                 WlSeat,
                 7,
                 |seat: Main<WlSeat>, mut globals: DispatchData| {
-                    seat.quick_assign(move |_, _, _| {});
                     globals.get::<Globals>().unwrap().seats.push(seat);
                 }
             ],
@@ -99,33 +98,27 @@ fn main() {
         .sync_roundtrip(&mut globals, |_, _, _| unreachable!())
         .unwrap();
 
-    for (_, seat) in globals
-        .seats
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| match seat {
-            Some(seat) => {
-                if *i == seat {
-                    true
-                } else {
-                    false
-                }
-            }
-            None => true,
-        })
-    {
+    for seat in globals.seats {
         let seat_status = globals
             .status_manager
             .as_ref()
             .expect("Compositor doesn't implement river_status_unstable_v1")
             .get_river_seat_status(&seat);
-        seat_status.quick_assign(move |_, event, _| match event {
-            zriver_seat_status_v1::Event::FocusedView { title } => {
-                if enable_title {
-                    println!("{}", title)
-                }
+        seat.quick_assign(move |_, event, mut seat_name| {
+            match event {
+                Event::Name{ name } => if String::new().eq(seat_name.get::<String>().unwrap()) 
+                    || name.eq(seat_name.get::<String>().unwrap()) {
+                    seat_status.quick_assign(move |_, event, _| match event {
+                        zriver_seat_status_v1::Event::FocusedView { title } => {
+                            if enable_title {
+                                println!("{}", title)
+                            }
+                        }
+                        _ => {}
+                    })
+                },
+                _ => seat_status.quick_assign(move |_, _, _| {})
             }
-            _ => {}
         })
     }
     for (_, output) in globals
@@ -170,7 +163,7 @@ fn main() {
 
     loop {
         event_queue
-            .dispatch(&mut (), |event, object, _| {
+            .dispatch(&mut seat_name, |event, object, _| {
                 panic!(
                     "[callop] Encountered an orphan event: {}@{}: {}",
                     event.interface,
@@ -193,9 +186,7 @@ fn base10(tagmask: u32) {
         if current != tagmask && (tagmask / current) % 2 != 0 {
             base10(tagmask - current);
             break;
-        } else if tag == 32 {
-            break;
-        }
+        } else if tag == 32 { break; }
     }
     print!("{} ", tag);
 }
