@@ -54,7 +54,7 @@ fn main() {
                     println!("Usage: status [option]\n");
                     println!("  --monitor | -m <uint> : select the monitor");
                     println!("  --tag | -t : displays the focused tag");
-                    println!("  --tag | -t : displays the title of the focused view");
+                    println!("  --window-title | -w : displays the title of the focused view");
                     println!("  --view-tags | -vt : displays the tag of all views");
                     std::process::exit(0);
                 }
