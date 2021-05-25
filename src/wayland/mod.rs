@@ -1,5 +1,6 @@
 extern crate wayland_client;
 extern crate wayland_commons;
+extern crate wayland_protocols;
 
 // Re-export only the actual code, and then only use this re-export
 // The `generated` module below is just some boilerplate to properly isolate stuff
@@ -25,6 +26,7 @@ pub mod wayland {
         pub(crate) use wayland_commons::smallvec;
         pub(crate) use wayland_commons::wire::{Argument, ArgumentType, Message, MessageDesc};
         pub(crate) use wayland_commons::{Interface, MessageGroup};
+        // pub(crate) use wayland_protocols::unstable::xdg_output::v1::client::zxdg_output_v1::Event;
         // If you protocol interacts with objects from other protocols, you'll need to import
         // their modules, like so:
         pub(crate) use wayland_client::protocol::{wl_region, wl_seat, wl_surface};

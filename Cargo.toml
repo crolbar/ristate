@@ -10,6 +10,6 @@ edition = "2018"
 wayland-scanner = "0.28.5"
 
 [dependencies]
-wayland-scanner = "0.28.5"
+wayland-protocols = "0.28.5"
 wayland-commons = "0.28.5"
 wayland-client = "0.28.5"

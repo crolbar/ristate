@@ -4,15 +4,16 @@ use crate::wayland::river_status_unstable_v1::{
     zriver_output_status_v1, zriver_seat_status_v1, zriver_status_manager_v1::ZriverStatusManagerV1,
 };
 use wayland_client::protocol::{
+    wl_seat,
     wl_output::WlOutput,
     wl_seat::WlSeat,
-    wl_seat::Event
 };
 use wayland_client::{Display, GlobalManager, Main};
 
 struct Globals {
     seats: Vec<Main<WlSeat>>,
     outputs: Vec<Main<WlOutput>>,
+    // xdg_outputs: Vec<Main<WlOutput>>,
     status_manager: Option<Main<ZriverStatusManagerV1>>,
 }
 
@@ -25,6 +26,7 @@ fn main() {
         Globals {
             seats: Vec::new(),
             outputs: Vec::new(),
+            // xdg_outputs: Vec::new(),
             status_manager: None,
         }
     };
@@ -106,18 +108,13 @@ fn main() {
             .get_river_seat_status(&seat);
         seat.quick_assign(move |_, event, mut seat_name| {
             match event {
-                Event::Name{ name } => if String::new().eq(seat_name.get::<String>().unwrap()) 
-                    || name.eq(seat_name.get::<String>().unwrap()) {
+                wl_seat::Event::Name{ name } => if enable_title && seat_name.get::<String>().unwrap().len() == 0 || name.eq(seat_name.get::<String>().unwrap()) {
                     seat_status.quick_assign(move |_, event, _| match event {
-                        zriver_seat_status_v1::Event::FocusedView { title } => {
-                            if enable_title {
-                                println!("{}", title)
-                            }
-                        }
+                        zriver_seat_status_v1::Event::FocusedView { title } => println!("{}", title),
                         _ => {}
                     })
                 },
-                _ => seat_status.quick_assign(move |_, _, _| {})
+                _ => {}
             }
         })
     }

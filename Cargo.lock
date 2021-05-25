@@ -78,6 +78,7 @@ version = "0.1.0"
 dependencies = [
  "wayland-client",
  "wayland-commons",
+ "wayland-protocols",
  "wayland-scanner",
 ]
 
@@ -118,6 +119,17 @@ dependencies = [
  "once_cell",
  "smallvec",
  "wayland-sys",
+]
+
+[[package]]
+name = "wayland-protocols"
+version = "0.28.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95df3317872bcf9eec096c864b69aa4769a1d5d6291a5b513f8ba0af0efbd52c"
+dependencies = [
+ "bitflags",
+ "wayland-commons",
+ "wayland-scanner",
 ]
 
 [[package]]
