@@ -113,7 +113,7 @@ fn main() {
                         zriver_seat_status_v1::Event::FocusedView { title } => println!("{}", title),
                         _ => {}
                     })
-                },
+                } else { seat_status.quick_assign(move |_, _, _| {}) },
                 _ => {}
             }
         })
