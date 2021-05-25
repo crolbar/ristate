@@ -1,16 +1,15 @@
 mod wayland;
 
-use wayland_client::protocol::wl_output::WlOutput;
-use crate::wayland::{
-    river_status_unstable_v1::zriver_status_manager_v1::ZriverStatusManagerV1,
-    river_status_unstable_v1::zriver_output_status_v1::ZriverOutputStatusV1,
+use crate::wayland::river_status_unstable_v1::{
+    zriver_output_status_v1, zriver_seat_status_v1, zriver_status_manager_v1::ZriverStatusManagerV1,
 };
-use crate::wayland::river_status_unstable_v1::zriver_output_status_v1;
+use wayland_client::protocol::{wl_output::WlOutput, wl_seat::WlSeat};
 use wayland_client::{Display, GlobalManager, Main};
 
 struct Globals {
-    outputs: Vec<WlOutput>,
-    status_manager: Option<Main<ZriverStatusManagerV1>>
+    seats: Vec<Main<WlSeat>>,
+    outputs: Vec<Main<WlOutput>>,
+    status_manager: Option<Main<ZriverStatusManagerV1>>,
 }
 
 fn main() {
@@ -18,30 +17,45 @@ fn main() {
 
     let mut event_queue = display.create_event_queue();
 
-    let mut globals = { Globals {
-        outputs: Vec::new(),
-        status_manager: None
-    } };
+    let mut globals = {
+        Globals {
+            seats: Vec::new(),
+            outputs: Vec::new(),
+            status_manager: None,
+        }
+    };
 
     let mut args = std::env::args();
+    let mut seat = None;
     let mut monitor = None;
     let mut enable_tag = false;
+    let mut enable_title = true;
     let mut enable_views_tag = false;
     args.next();
     loop {
         match args.next() {
             Some(flag) => match flag.as_str() {
-                "--monitor" | "-m" => monitor = match args.next().unwrap_or(String::new()).parse::<usize>() {
-                    Ok(i) => Some(i),
-                    Err(_) => None,
-                },
+                "--seat" | "-s" => {
+                    seat = match args.next().unwrap_or(String::new()).parse::<usize>() {
+                        Ok(i) => Some(i),
+                        Err(_) => None,
+                    }
+                }
+                "--monitor" | "-m" => {
+                    monitor = match args.next().unwrap_or(String::new()).parse::<usize>() {
+                        Ok(i) => Some(i),
+                        Err(_) => None,
+                    }
+                }
+                "--window-title" | "-w" => enable_title = true,
                 "--tag" | "-t" => enable_tag = true,
                 "--view-tags" | "-vt" => enable_views_tag = true,
                 "--help" | "-h" | "--h" => {
                     println!("Usage: status [option]\n");
+                    println!("  --monitor | -m <uint> : select the monitor");
                     println!("  --tag | -t : displays the focused tag");
+                    println!("  --tag | -t : displays the title of the focused view");
                     println!("  --view-tags | -vt : displays the tag of all views");
-                    println!("  --monitor | -m : select the monitor index");
                     std::process::exit(0);
                 }
                 _ => break,
@@ -63,11 +77,19 @@ fn main() {
                 }
             ],
             [
+                WlSeat,
+                7,
+                |seat: Main<WlSeat>, mut globals: DispatchData| {
+                    seat.quick_assign(move |_, _, _| {});
+                    globals.get::<Globals>().unwrap().seats.push(seat);
+                }
+            ],
+            [
                 WlOutput,
                 3,
                 |output: Main<WlOutput>, mut globals: DispatchData| {
                     output.quick_assign(move |_, _, _| {});
-                    globals.get::<Globals>().unwrap().outputs.push(output.detach());
+                    globals.get::<Globals>().unwrap().outputs.push(output);
                 }
             ]
         ),
@@ -77,40 +99,73 @@ fn main() {
         .sync_roundtrip(&mut globals, |_, _, _| unreachable!())
         .unwrap();
 
-    for (i, output) in globals.outputs.iter_mut().enumerate() {
-        let assign;
-        match monitor {
-            Some(monitor) => if i == monitor {
-                assign = true;
-            } else { assign = false },
-            None => assign = true
-        }
-        if assign {
-            let output_status = globals.status_manager
-                .as_ref()
-                .expect("Compositor doesn't implement river_status_unstable_v1")
-                .get_river_output_status(&output);
-            output_status.quick_assign(move |_, event, _| match event {
-                zriver_output_status_v1::Event::FocusedTags { tags } => {
-                    if enable_tag {
-                        base10(tags);
-                        println!("");
-                    }
+    for (_, seat) in globals
+        .seats
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| match seat {
+            Some(seat) => {
+                if *i == seat {
+                    true
+                } else {
+                    false
                 }
-                zriver_output_status_v1::Event::ViewTags { tags } => {
-                    if enable_views_tag {
-                        let len = tags.len();
-                        let mut i = 0;
-                        while i < len {
-                            let buf: [u8; 4] = [tags[i],tags[i+1],tags[i+2],tags[i+3]];
-                            base10(u32::from_le_bytes(buf));
-                            i+=4;
-                        }
-                        println!("");
-                    }
+            }
+            None => true,
+        })
+    {
+        let seat_status = globals
+            .status_manager
+            .as_ref()
+            .expect("Compositor doesn't implement river_status_unstable_v1")
+            .get_river_seat_status(&seat);
+        seat_status.quick_assign(move |_, event, _| match event {
+            zriver_seat_status_v1::Event::FocusedView { title } => {
+                if enable_title {
+                    println!("{}", title)
                 }
-            });
-        }
+            }
+            _ => {}
+        })
+    }
+    for (_, output) in globals
+        .outputs
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| match monitor {
+            Some(monitor) => {
+                if *i == monitor {
+                    true
+                } else {
+                    false
+                }
+            }
+            None => true,
+        })
+    {
+        let output_status = globals
+            .status_manager
+            .as_ref()
+            .expect("Compositor doesn't implement river_status_unstable_v1")
+            .get_river_output_status(&output);
+        output_status.quick_assign(move |_, event, _| match event {
+            zriver_output_status_v1::Event::FocusedTags { tags } => {
+                if enable_tag {
+                    base10(tags);
+                    println!("");
+                }
+            }
+            zriver_output_status_v1::Event::ViewTags { tags } => {
+                if enable_views_tag {
+                    let len = tags.len();
+                    for i in (0..len).into_iter().step_by(4) {
+                        let buf: [u8; 4] = [tags[i], tags[i + 1], tags[i + 2], tags[i + 3]];
+                        base10(u32::from_le_bytes(buf));
+                    }
+                    println!("");
+                }
+            }
+        });
     }
 
     loop {
@@ -130,12 +185,17 @@ fn main() {
 fn base10(tagmask: u32) {
     let mut tag = 0;
     let mut current: u32;
-    while {current = 1 << tag; current <= tagmask} {
+    while {
+        current = 1 << tag;
+        current <= tagmask
+    } {
         tag += 1;
-        if current != tagmask && (tagmask/current) % 2 != 0 {
-            base10(tagmask-current);
+        if current != tagmask && (tagmask / current) % 2 != 0 {
+            base10(tagmask - current);
             break;
-        } else if tag == 32 { break }
+        } else if tag == 32 {
+            break;
+        }
     }
     print!("{} ", tag);
 }
