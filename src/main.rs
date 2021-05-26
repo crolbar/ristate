@@ -1,7 +1,9 @@
 mod wayland;
 
 use crate::wayland::river_status_unstable_v1::{
-    zriver_output_status_v1, zriver_seat_status_v1, zriver_status_manager_v1::ZriverStatusManagerV1,
+    zriver_output_status_v1,
+    zriver_seat_status_v1,
+    zriver_status_manager_v1::ZriverStatusManagerV1,
 };
 use wayland_client::protocol::{
     wl_seat,
@@ -13,7 +15,6 @@ use wayland_client::{Display, GlobalManager, Main};
 struct Globals {
     seats: Vec<Main<WlSeat>>,
     outputs: Vec<Main<WlOutput>>,
-    // xdg_outputs: Vec<Main<WlOutput>>,
     status_manager: Option<Main<ZriverStatusManagerV1>>,
 }
 
@@ -34,7 +35,18 @@ impl Keypair {
 }
 
 impl Config {
-    fn json(&self) {
+    fn mod_value(&mut self, key: String, value: String) {
+        for keypair in &mut self.keypair {
+            if keypair.key.eq(&key) { keypair.value = value; break }
+        }
+    }
+    fn add_keypair(&mut self, key: String) {
+        self.keypair.push({ Keypair {
+            key: key,
+            value: String::new()
+        } });
+    }
+    fn to_string(&self) {
         let len = self.keypair.len();
         print!("{{");
         for (i,keypair) in self.keypair.iter().enumerate() {
@@ -56,20 +68,19 @@ fn main() {
         Globals {
             seats: Vec::new(),
             outputs: Vec::new(),
-            // xdg_outputs: Vec::new(),
             status_manager: None,
         }
     };
 
+    let mut args = std::env::args();
     let mut config = { Config {
         seat_name: String::new(),
         keypair: Vec::new()
     } };
-    let mut args = std::env::args();
     let mut monitor = None;
-    let mut enable_tag = true;
+    let mut enable_tag = false;
     let mut enable_title = false;
-    let mut enable_views_tag = true;
+    let mut enable_views_tag = false;
     args.next();
     loop {
         match args.next() {
@@ -135,19 +146,20 @@ fn main() {
 
     for seat in globals.seats {
         if enable_title {
-            enable_tag = false;
-            enable_views_tag = false;
             let seat_status = globals
                 .status_manager
                 .as_ref()
                 .expect("Compositor doesn't implement river_status_unstable_v1")
                 .get_river_seat_status(&seat);
+            config.add_keypair("title".to_owned());
             seat.quick_assign(move |_, event, mut config| {
                 let seat_name = &config.get::<Config>().unwrap().seat_name;
                 match event {
                     wl_seat::Event::Name{ name } => if seat_name.len() == 0 || name.eq(seat_name) {
-                        seat_status.quick_assign(move |_, event, _| match event {
-                            zriver_seat_status_v1::Event::FocusedView { title } => println!("{}", title),
+                        seat_status.quick_assign(move |_, event, mut config| match event {
+                            zriver_seat_status_v1::Event::FocusedView { title } => {
+                                config.get::<Config>().unwrap().mod_value("title".to_owned(), title);
+                            },
                             _ => {}
                         })
                     } else { seat_status.quick_assign(move |_, _, _| {}) },
@@ -165,14 +177,8 @@ fn main() {
                 if *i == index { true } else { false }
             } else { true })
         {
-            config.keypair.push({ Keypair {
-                key: format!("tag{}",i),
-                value: String::new()
-            } });
-            config.keypair.push({ Keypair {
-                key: format!("views_tag{}",i),
-                value: String::new()
-            } });
+            if enable_tag { config.add_keypair(format!("tag{}",i)); }
+            if enable_views_tag { config.add_keypair(format!("views_tag{}",i)); }
             let output_status = globals
                 .status_manager
                 .as_ref()
@@ -181,9 +187,7 @@ fn main() {
             output_status.quick_assign(move |_, event, mut config| match event {
                 zriver_output_status_v1::Event::FocusedTags { tags } => {
                     if enable_tag {
-                        for keypair in &mut config.get::<Config>().unwrap().keypair {
-                            if keypair.key.eq(&format!("tag{}",i)) { keypair.value = base10(tags).trim_end().to_owned(); break }
-                        }
+                        config.get::<Config>().unwrap().mod_value(format!("tag{}",i), base10(tags).trim_end().to_owned());
                     }
                 }
                 zriver_output_status_v1::Event::ViewTags { tags } => {
@@ -194,9 +198,7 @@ fn main() {
                             let buf: [u8; 4] = [tags[i], tags[i + 1], tags[i + 2], tags[i + 3]];
                             views_tag.push_str(&base10(u32::from_le_bytes(buf)));
                         }
-                        for keypair in &mut config.get::<Config>().unwrap().keypair {
-                            if keypair.key.eq(&format!("views_tag{}",i)) { keypair.value = views_tag.trim_end().to_owned(); break }
-                        }
+                        config.get::<Config>().unwrap().mod_value(format!("views_tag{}",i), views_tag.trim_end().to_owned());
                     }
                 }
             });
@@ -214,9 +216,7 @@ fn main() {
                 );
             })
             .unwrap();
-        if enable_views_tag || enable_tag {
-            config.json();
-        }
+        if enable_views_tag || enable_tag || enable_title { config.to_string(); }
     }
 }
 
