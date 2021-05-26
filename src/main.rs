@@ -1,7 +1,5 @@
 mod wayland;
 
-use std::io::stdout;
-use std::io::Write;
 use crate::wayland::river_status_unstable_v1::{
     zriver_output_status_v1, zriver_seat_status_v1, zriver_status_manager_v1::ZriverStatusManagerV1,
 };
