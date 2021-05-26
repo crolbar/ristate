@@ -1,5 +1,7 @@
 mod wayland;
 
+use std::io::stdout;
+use std::io::Write;
 use crate::wayland::river_status_unstable_v1::{
     zriver_output_status_v1, zriver_seat_status_v1, zriver_status_manager_v1::ZriverStatusManagerV1,
 };
@@ -17,6 +19,36 @@ struct Globals {
     status_manager: Option<Main<ZriverStatusManagerV1>>,
 }
 
+struct Config {
+    seat_name: String,
+    keypair: Vec<Keypair>,
+}
+
+struct Keypair {
+    key: String,
+    value: String,
+}
+
+impl Keypair {
+    fn to_string(&self) {
+        print!(r#""{}": "{}""#, self.key, self.value)
+    }
+}
+
+impl Config {
+    fn json(&self) {
+        let len = self.keypair.len();
+        print!("{{");
+        for (i,keypair) in self.keypair.iter().enumerate() {
+            keypair.to_string();
+            if i+1 < len {
+                print!(", ");
+            }
+        }
+        println!("}}");
+    }
+}
+
 fn main() {
     let display = Display::connect_to_env().unwrap();
 
@@ -31,17 +63,20 @@ fn main() {
         }
     };
 
+    let mut config = { Config {
+        seat_name: String::new(),
+        keypair: Vec::new()
+    } };
     let mut args = std::env::args();
     let mut monitor = None;
-    let mut seat_name = String::new();
-    let mut enable_tag = false;
+    let mut enable_tag = true;
     let mut enable_title = false;
-    let mut enable_views_tag = false;
+    let mut enable_views_tag = true;
     args.next();
     loop {
         match args.next() {
             Some(flag) => match flag.as_str() {
-                "--seat" | "-s" => seat_name = args.next().unwrap_or(String::new()),
+                "--seat" | "-s" => config.seat_name = args.next().unwrap_or(String::new()),
                 "--monitor" | "-m" => {
                     monitor = match args.next().unwrap_or(String::new()).parse::<usize>() {
                         Ok(i) => Some(i),
@@ -101,66 +136,78 @@ fn main() {
         .unwrap();
 
     for seat in globals.seats {
-        let seat_status = globals
-            .status_manager
-            .as_ref()
-            .expect("Compositor doesn't implement river_status_unstable_v1")
-            .get_river_seat_status(&seat);
-        seat.quick_assign(move |_, event, mut seat_name| {
-            match event {
-                wl_seat::Event::Name{ name } => if enable_title && seat_name.get::<String>().unwrap().len() == 0 || name.eq(seat_name.get::<String>().unwrap()) {
-                    seat_status.quick_assign(move |_, event, _| match event {
-                        zriver_seat_status_v1::Event::FocusedView { title } => println!("{}", title),
-                        _ => {}
-                    })
-                } else { seat_status.quick_assign(move |_, _, _| {}) },
-                _ => {}
-            }
-        })
+        if enable_title {
+            enable_tag = false;
+            enable_views_tag = false;
+            let seat_status = globals
+                .status_manager
+                .as_ref()
+                .expect("Compositor doesn't implement river_status_unstable_v1")
+                .get_river_seat_status(&seat);
+            seat.quick_assign(move |_, event, mut config| {
+                let seat_name = &config.get::<Config>().unwrap().seat_name;
+                match event {
+                    wl_seat::Event::Name{ name } => if seat_name.len() == 0 || name.eq(seat_name) {
+                        seat_status.quick_assign(move |_, event, _| match event {
+                            zriver_seat_status_v1::Event::FocusedView { title } => println!("{}", title),
+                            _ => {}
+                        })
+                    } else { seat_status.quick_assign(move |_, _, _| {}) },
+                    _ => {}
+                }
+            })
+        } else { seat.quick_assign(move |_, _, _| {}) }
     }
-    for (_, output) in globals
-        .outputs
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| match monitor {
-            Some(monitor) => {
-                if *i == monitor {
-                    true
-                } else {
-                    false
-                }
-            }
-            None => true,
-        })
-    {
-        let output_status = globals
-            .status_manager
-            .as_ref()
-            .expect("Compositor doesn't implement river_status_unstable_v1")
-            .get_river_output_status(&output);
-        output_status.quick_assign(move |_, event, _| match event {
-            zriver_output_status_v1::Event::FocusedTags { tags } => {
-                if enable_tag {
-                    base10(tags);
-                    println!("");
-                }
-            }
-            zriver_output_status_v1::Event::ViewTags { tags } => {
-                if enable_views_tag {
-                    let len = tags.len();
-                    for i in (0..len).into_iter().step_by(4) {
-                        let buf: [u8; 4] = [tags[i], tags[i + 1], tags[i + 2], tags[i + 3]];
-                        base10(u32::from_le_bytes(buf));
+    if enable_tag || enable_views_tag {
+        for (i, output) in globals
+            .outputs
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| if let Some(index) = monitor {
+                if *i == index { true } else { false }
+            } else { true })
+        {
+            config.keypair.push({ Keypair {
+                key: format!("tag{}",i),
+                value: String::new()
+            } });
+            config.keypair.push({ Keypair {
+                key: format!("views_tag{}",i),
+                value: String::new()
+            } });
+            let output_status = globals
+                .status_manager
+                .as_ref()
+                .expect("Compositor doesn't implement river_status_unstable_v1")
+                .get_river_output_status(&output);
+            output_status.quick_assign(move |_, event, mut config| match event {
+                zriver_output_status_v1::Event::FocusedTags { tags } => {
+                    if enable_tag {
+                        for keypair in &mut config.get::<Config>().unwrap().keypair {
+                            if keypair.key.eq(&format!("tag{}",i)) { keypair.value = base10(tags).trim_end().to_owned(); break }
+                        }
                     }
-                    println!("");
                 }
-            }
-        });
+                zriver_output_status_v1::Event::ViewTags { tags } => {
+                    if enable_views_tag {
+                        let len = tags.len();
+                        let mut views_tag = String::new();
+                        for i in (0..len).into_iter().step_by(4) {
+                            let buf: [u8; 4] = [tags[i], tags[i + 1], tags[i + 2], tags[i + 3]];
+                            views_tag.push_str(&base10(u32::from_le_bytes(buf)));
+                        }
+                        for keypair in &mut config.get::<Config>().unwrap().keypair {
+                            if keypair.key.eq(&format!("views_tag{}",i)) { keypair.value = views_tag.trim_end().to_owned(); break }
+                        }
+                    }
+                }
+            });
+        }
     }
 
     loop {
         event_queue
-            .dispatch(&mut seat_name, |event, object, _| {
+            .dispatch(&mut config, |event, object, _| {
                 panic!(
                     "[callop] Encountered an orphan event: {}@{}: {}",
                     event.interface,
@@ -169,10 +216,14 @@ fn main() {
                 );
             })
             .unwrap();
+        if enable_views_tag || enable_tag {
+            config.json();
+        }
     }
 }
 
-fn base10(tagmask: u32) {
+fn base10(tagmask: u32) -> String {
+    let mut format = String::new();
     let mut tag = 0;
     let mut current: u32;
     while {
@@ -181,9 +232,11 @@ fn base10(tagmask: u32) {
     } {
         tag += 1;
         if current != tagmask && (tagmask / current) % 2 != 0 {
-            base10(tagmask - current);
+            format.push_str(&(base10(tagmask - current)));
             break;
         } else if tag == 32 { break; }
     }
-    print!("{} ", tag);
+    format.push_str(&tag.to_string());
+    format.push(' ');
+    format
 }
