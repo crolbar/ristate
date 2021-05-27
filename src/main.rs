@@ -96,12 +96,12 @@ fn main() {
                 "--tag" | "-t" => enable_tag = true,
                 "--view-tags" | "-vt" => enable_views_tag = true,
                 "--help" | "-h" | "--h" => {
-                    println!("Usage: status [option]\n");
-                    println!("  --monitor | -m <uint> : select the monitor");
-                    println!("  --seat | -s <string> : select the seat");
-                    println!("  --tag | -t : displays the focused tag");
-                    println!("  --view-tags | -vt : displays the tag of all views");
-                    println!("  --window-title | -w : displays the title of the focused view");
+                    print!("Usage: ristate [option]\n\n");
+                    print!("  --monitor | -m <uint> : select the monitor\n");
+                    print!("  --seat | -s <string> : select the seat\n");
+                    print!("  --tag | -t : displays the focused tag\n");
+                    print!("  --view-tags | -vt : displays the tag of all views\n");
+                    println!("  --window-title | -w : displays the title of the focused view\n");
                     std::process::exit(0);
                 }
                 _ => break,
@@ -216,7 +216,7 @@ fn main() {
                 );
             })
             .unwrap();
-        if enable_views_tag || enable_tag || enable_title { config.to_string(); }
+        config.to_string()
     }
 }
 
