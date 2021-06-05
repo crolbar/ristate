@@ -18,7 +18,7 @@ struct Globals {
     status_manager: Option<Main<ZriverStatusManagerV1>>,
 }
 
-struct Config {
+struct Status {
     seat_name: String,
     keypair: Vec<Keypair>,
 }
@@ -34,7 +34,7 @@ impl Keypair {
     }
 }
 
-impl Config {
+impl Status {
     fn mod_value(&mut self, key: String, value: String) {
         for keypair in &mut self.keypair {
             if keypair.key.eq(&key) { keypair.value = value; break }
@@ -73,7 +73,7 @@ fn main() {
     };
 
     let mut args = std::env::args();
-    let mut config = { Config {
+    let mut status = { Status {
         seat_name: String::new(),
         keypair: Vec::new()
     } };
@@ -85,7 +85,7 @@ fn main() {
     loop {
         match args.next() {
             Some(flag) => match flag.as_str() {
-                "--seat" | "-s" => config.seat_name = args.next().unwrap_or(String::new()),
+                "--seat" | "-s" => status.seat_name = args.next().unwrap_or(String::new()),
                 "--monitor" | "-m" => {
                     monitor = match args.next().unwrap_or(String::new()).parse::<usize>() {
                         Ok(i) => Some(i),
@@ -151,14 +151,14 @@ fn main() {
                 .as_ref()
                 .expect("Compositor doesn't implement river_status_unstable_v1")
                 .get_river_seat_status(&seat);
-            config.add_keypair("title".to_owned());
-            seat.quick_assign(move |_, event, mut config| {
-                let seat_name = &config.get::<Config>().unwrap().seat_name;
+            status.add_keypair("title".to_owned());
+            seat.quick_assign(move |_, event, mut status| {
+                let seat_name = &status.get::<Status>().unwrap().seat_name;
                 match event {
                     wl_seat::Event::Name{ name } => if seat_name.len() == 0 || name.eq(seat_name) {
-                        seat_status.quick_assign(move |_, event, mut config| match event {
+                        seat_status.quick_assign(move |_, event, mut status| match event {
                             zriver_seat_status_v1::Event::FocusedView { title } => {
-                                config.get::<Config>().unwrap().mod_value("title".to_owned(), title);
+                                status.get::<Status>().unwrap().mod_value("title".to_owned(), title);
                             },
                             _ => {}
                         })
@@ -177,17 +177,17 @@ fn main() {
                 if *i == index { true } else { false }
             } else { true })
         {
-            if enable_tag { config.add_keypair(format!("tag{}",i)); }
-            if enable_views_tag { config.add_keypair(format!("views_tag{}",i)); }
+            if enable_tag { status.add_keypair(format!("tag{}",i)); }
+            if enable_views_tag { status.add_keypair(format!("views_tag{}",i)); }
             let output_status = globals
                 .status_manager
                 .as_ref()
                 .expect("Compositor doesn't implement river_status_unstable_v1")
                 .get_river_output_status(&output);
-            output_status.quick_assign(move |_, event, mut config| match event {
+            output_status.quick_assign(move |_, event, mut status| match event {
                 zriver_output_status_v1::Event::FocusedTags { tags } => {
                     if enable_tag {
-                        config.get::<Config>().unwrap().mod_value(format!("tag{}",i), base10(tags).trim_end().to_owned());
+                        status.get::<Status>().unwrap().mod_value(format!("tag{}",i), base10(tags).trim_end().to_owned());
                     }
                 }
                 zriver_output_status_v1::Event::ViewTags { tags } => {
@@ -198,7 +198,7 @@ fn main() {
                             let buf: [u8; 4] = [tags[i], tags[i + 1], tags[i + 2], tags[i + 3]];
                             views_tag.push_str(&base10(u32::from_le_bytes(buf)));
                         }
-                        config.get::<Config>().unwrap().mod_value(format!("views_tag{}",i), views_tag.trim_end().to_owned());
+                        status.get::<Status>().unwrap().mod_value(format!("views_tag{}",i), views_tag.trim_end().to_owned());
                     }
                 }
             });
@@ -207,7 +207,7 @@ fn main() {
 
     loop {
         event_queue
-            .dispatch(&mut config, |event, object, _| {
+            .dispatch(&mut status, |event, object, _| {
                 panic!(
                     "[callop] Encountered an orphan event: {}@{}: {}",
                     event.interface,
@@ -216,7 +216,7 @@ fn main() {
                 );
             })
             .unwrap();
-        config.to_string()
+        status.to_string()
     }
 }
 
