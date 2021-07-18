@@ -97,11 +97,11 @@ fn main() {
                 "--view-tags" | "-vt" => enable_views_tag = true,
                 "--help" | "-h" | "--h" => {
                     print!("Usage: ristate [option]\n\n");
-                    print!("  --monitor | -m <uint> : select the monitor\n");
-                    print!("  --seat | -s <string> : select the seat\n");
-                    print!("  --tag | -t : displays the focused tag\n");
-                    print!("  --view-tags | -vt : displays the tag of all views\n");
-                    println!("  --window-title | -w : displays the title of the focused view\n");
+                    print!("  -s | --seat <string>  		select the seat\n");
+                    print!("  -m | --monitor <uint> 		select the monitor\n");
+                    print!("  -t | --tag 				displays the focused tag\n");
+                    print!("  -vt | --view-tags  			displays the tag of all views\n");
+                    println!("  -w | --window-title  		  	displays the title of the focused view\n");
                     std::process::exit(0);
                 }
                 _ => break,
