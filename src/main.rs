@@ -62,27 +62,37 @@ impl Env {
         print!("{{");
         let mut i = 0;
         let len = self.hashmap.len();
-        for (key, val) in self.hashmap.iter() {
-            print!("{:?} :", key);
-            match val {
-                Value::Tags(tags) => {
-                    print!("[");
-                    fmt_tags(*tags);
-                    print!("]");
+        if len > 0 {
+            for (key, val) in self.hashmap.iter() {
+                print!("{:?} :", key);
+                match val {
+                    Value::Tags(tags) => {
+                        print!("[");
+                        fmt_tags(*tags);
+                        print!("]");
+                    }
+                    Value::Title(title) => {
+                        print!("{:?}", title);
+                    }
+                    Value::ViewsTag(tags) => {
+                        print!("[");
+                        let len = tags.len();
+                        for (i, tag) in tags.iter().enumerate() {
+                            print!("\"{}\"", tag);
+                            if i < len - 1 {
+                                print!(", ");
+                            }
+                        }
+                        print!("]");
+                    }
                 }
-                Value::Title(title) => {
-                    print!("{:?}", title);
-                }
-                Value::ViewsTag(tags) => {
-                    print!("\"{:?}\"", tags);
+                i += 1;
+                if i < len {
+                    print!(", ");
                 }
             }
-            i += 1;
-            if i < len {
-                print!(", ");
-            }
+            println!("}}");
         }
-        println!("}}");
     }
 }
 
@@ -150,9 +160,9 @@ fn main() {
                             {
                                 if let Some(status_manager) = &env.status_manager {
                                     make = make.replace(' ', "").to_string();
-                                    let tags_key = format!("Tags_{}", make);
-                                    let urgent_key = format!("UrgentTags_{}", make);
-                                    let views_key = format!("ViewsTags_{}", make);
+                                    let tags_key = format!("Tags{}", make);
+                                    let urgent_key = format!("UrgentTags{}", make);
+                                    let views_key = format!("ViewsTag{}", make);
                                     let output_status =
                                         status_manager.get_river_output_status(&output);
                                     output_status.quick_assign(move |_, event, mut env| {
@@ -177,7 +187,7 @@ fn main() {
                                                                     u32::from_le_bytes(buf);
                                                                 for i in 0..32 {
                                                                     if 1 << i == tagmask {
-                                                                        return i;
+                                                                        return 1+i;
                                                                     }
                                                                 }
                                                                 0
