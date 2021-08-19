@@ -66,9 +66,9 @@ impl Env {
             print!("{:?} :", key);
             match val {
                 Value::Tags(tags) => {
-                    print!("\"[");
+                    print!("[");
                     fmt_tags(*tags);
-                    print!("]\"");
+                    print!("]");
                 }
                 Value::Title(title) => {
                     print!("{:?}", title);
@@ -150,9 +150,9 @@ fn main() {
                             {
                                 if let Some(status_manager) = &env.status_manager {
                                     make = make.replace(' ', "").to_string();
-                                    let tags_key = format!("Tags.{}", make);
-                                    let urgent_key = format!("UrgentTags.{}", make);
-                                    let views_key = format!("ViewsTags.{}", make);
+                                    let tags_key = format!("Tags_{}", make);
+                                    let urgent_key = format!("UrgentTags_{}", make);
+                                    let views_key = format!("ViewsTags_{}", make);
                                     let output_status =
                                         status_manager.get_river_output_status(&output);
                                     output_status.quick_assign(move |_, event, mut env| {
@@ -268,11 +268,11 @@ fn fmt_tags(tagmask: u32) {
         tag += 1;
         if current != tagmask && (tagmask / current) % 2 != 0 {
             fmt_tags(tagmask - current);
-            print!(" ");
+            print!(", ");
             break;
         } else if tag == 32 {
             break;
         }
     }
-    print!("{}", tag);
+    print!("\"{}\"", tag);
 }
