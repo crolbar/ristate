@@ -59,10 +59,10 @@ impl Env {
         }
     }
     fn fmt(&self) {
-        print!("{{");
         let mut i = 0;
         let len = self.hashmap.len();
         if len > 0 {
+            print!("{{");
             for (key, val) in self.hashmap.iter() {
                 print!("{:?} :", key);
                 match val {
@@ -273,14 +273,12 @@ fn fmt_tags(tagmask: u32) {
     let mut current: u32;
     while {
         current = 1 << tag;
-        current <= tagmask
+        current <= tagmask || tag < 32
     } {
         tag += 1;
         if current != tagmask && (tagmask / current) % 2 != 0 {
             fmt_tags(tagmask - current);
             print!(", ");
-            break;
-        } else if tag == 32 {
             break;
         }
     }
