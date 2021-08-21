@@ -160,9 +160,9 @@ fn main() {
                             {
                                 if let Some(status_manager) = &env.status_manager {
                                     make = make.replace(' ', "").to_string();
-                                    let tags_key = format!("Tags{}", make);
-                                    let urgent_key = format!("UrgentTags{}", make);
-                                    let views_key = format!("ViewsTag{}", make);
+                                    let tags_key = format!("Tags-{}", make);
+                                    let urgent_key = format!("UrgentTags-{}", make);
+                                    let views_key = format!("ViewsTag-{}", make);
                                     let output_status =
                                         status_manager.get_river_output_status(&output);
                                     output_status.quick_assign(move |_, event, mut env| {
