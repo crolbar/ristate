@@ -59,10 +59,10 @@ impl Env {
         }
     }
     fn fmt(&self) {
-        print!("{{");
         let mut i = 0;
         let len = self.hashmap.len();
         if len > 0 {
+            print!("{{");
             for (key, val) in self.hashmap.iter() {
                 print!("{:?} :", key);
                 match val {
