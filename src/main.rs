@@ -10,7 +10,6 @@ use wayland_client::{Display, GlobalManager, Main};
 #[derive(Debug)]
 enum Value {
     Tags(u32),
-    Title(String),
     ViewsTag(Vec<u32>),
 }
 
@@ -39,57 +38,80 @@ impl Flags {
 
 struct Env {
     flags: Flags,
-    hashmap: HashMap<String, Value>,
+    title: Option<String>,
+    tags: HashMap<String, u32>,
+    viewstag: HashMap<String, Vec<u32>>,
     status_manager: Option<Main<ZriverStatusManagerV1>>,
 }
 
 impl Env {
     fn new() -> Env {
         Env {
-            status_manager: None,
+            title: None,
             flags: configuration(),
-            hashmap: HashMap::new(),
+            viewstag: HashMap::new(),
+            tags: HashMap::new(),
+            status_manager: None,
         }
     }
     fn set_value(&mut self, key: &str, value: Value) {
-        if let Some(inner_value) = self.hashmap.get_mut(key) {
-            (*inner_value) = value;
-        } else {
-            self.hashmap.insert(key.to_string(), value);
+        match value {
+            Value::Tags( tags ) => {
+                if let Some(inner_value) = self.tags.get_mut(key) {
+                    (*inner_value) = tags;
+                } else {
+                    self.tags.insert(key.to_string(), tags);
+                }
+            }
+            Value::ViewsTag( tags ) => {
+                if let Some(inner_value) = self.viewstag.get_mut(key) {
+                    (*inner_value) = tags;
+                } else {
+                    self.viewstag.insert(key.to_string(), tags);
+                }
+            }
         }
     }
     fn fmt(&self) {
-        let mut i = 0;
-        let len = self.hashmap.len();
-        if len > 0 {
+        if !self.tags.is_empty()
+        || !self.viewstag.is_empty()
+        || self.title.is_some() {
             print!("{{");
-            for (key, val) in self.hashmap.iter() {
-                print!("{:?} :", key);
-                match val {
-                    Value::Tags(tags) => {
-                        print!("[");
-                        fmt_tags(*tags);
-                        print!("]");
-                    }
-                    Value::Title(title) => {
-                        print!("{:?}", title);
-                    }
-                    Value::ViewsTag(tags) => {
-                        print!("[");
-                        let len = tags.len();
-                        for (i, tag) in tags.iter().enumerate() {
-                            print!("\"{}\"", tag);
-                            if i < len - 1 {
-                                print!(", ");
-                            }
-                        }
-                        print!("]");
-                    }
+            let mut comma = false;
+            if !self.tags.is_empty() {
+                print!("\"tags\" : [");
+                let len = self.tags.len();
+                for (i, (key, tags)) in self.tags.iter().enumerate() {
+                    print!("{{{:?} : ", key);
+                    print!("[");
+                    fmt_tags(*tags);
+                    print!("]}}");
+                    if i < len - 1 { print!(", "); }
                 }
-                i += 1;
-                if i < len {
-                    print!(", ");
+                print!("]");
+                comma = true;
+            }
+            if !self.viewstag.is_empty() {
+                if comma { print!(", "); }
+                print!("\"viewstag\" : [");
+                let vlen = self.viewstag.len();
+                for (i, (key, tags)) in self.viewstag.iter().enumerate() {
+                    print!("{{{:?} : ", key);
+                    print!("[");
+                    let len = tags.len();
+                    for (i, tag) in tags.iter().enumerate() {
+                        print!("\"{}\"", tag);
+                        if i < len - 1 { print!(", "); }
+                    }
+                    print!("]}}");
+                    if i < vlen - 1 { print!(", "); }
                 }
+                print!("]");
+                comma = true;
+            }
+            if let Some(title) = self.title.as_ref() {
+                if comma { print!(", "); }
+                print!("\"title\" : {:?}", title);
             }
             println!("}}");
         }
@@ -129,7 +151,7 @@ fn main() {
                                         move |_, event, mut env| match event {
                                             zriver_seat_status_v1::Event::FocusedView { title } => {
                                                 if let Some(env) = env.get::<Env>() {
-                                                    env.set_value("Title", Value::Title(title));
+                                                    env.title = Some(title);
                                                 }
                                             }
                                             _ => {}
@@ -160,9 +182,6 @@ fn main() {
                             {
                                 if let Some(status_manager) = &env.status_manager {
                                     make = make.replace(' ', "").to_string();
-                                    let tags_key = format!("Tags-{}", make);
-                                    let urgent_key = format!("UrgentTags-{}", make);
-                                    let views_key = format!("ViewsTag-{}", make);
                                     let output_status =
                                         status_manager.get_river_output_status(&output);
                                     output_status.quick_assign(move |_, event, mut env| {
@@ -172,7 +191,7 @@ fn main() {
                                                     tags,
                                                 } => {
                                                     if env.flags.tags {
-                                                        env.set_value(&tags_key, Value::Tags(tags));
+                                                        env.set_value(&make, Value::Tags(tags));
                                                     }
                                                 }
                                                 zriver_output_status_v1::Event::ViewTags {
@@ -194,7 +213,7 @@ fn main() {
                                                             })
                                                             .collect();
                                                         env.set_value(
-                                                            &views_key,
+                                                            &make,
                                                             Value::ViewsTag(tags),
                                                         );
                                                     }
@@ -204,7 +223,7 @@ fn main() {
                                                 } => {
                                                     if env.flags.urgency {
                                                         env.set_value(
-                                                            &urgent_key,
+                                                            &make,
                                                             Value::Tags(tags),
                                                         );
                                                     }
