@@ -40,6 +40,7 @@ struct Env {
     flags: Flags,
     title: Option<String>,
     tags: HashMap<String, u32>,
+    urgency: HashMap<String, u32>,
     viewstag: HashMap<String, Vec<u32>>,
     status_manager: Option<Main<ZriverStatusManagerV1>>,
 }
@@ -50,6 +51,7 @@ impl Env {
             title: None,
             flags: configuration(),
             viewstag: HashMap::new(),
+            urgency: HashMap::new(),
             tags: HashMap::new(),
             status_manager: None,
         }
@@ -75,6 +77,7 @@ impl Env {
     fn fmt(&self) {
         if !self.tags.is_empty()
         || !self.viewstag.is_empty()
+        || !self.urgency.is_empty()
         || self.title.is_some() {
             print!("{{");
             let mut comma = false;
@@ -82,6 +85,19 @@ impl Env {
                 print!("\"tags\" : [");
                 let len = self.tags.len();
                 for (i, (key, tags)) in self.tags.iter().enumerate() {
+                    print!("{{{:?} : ", key);
+                    print!("[");
+                    fmt_tags(*tags);
+                    print!("]}}");
+                    if i < len - 1 { print!(", "); }
+                }
+                print!("]");
+                comma = true;
+            }
+            if !self.urgency.is_empty() {
+                print!("\"urgent\" : [");
+                let len = self.urgency.len();
+                for (i, (key, tags)) in self.urgency.iter().enumerate() {
                     print!("{{{:?} : ", key);
                     print!("[");
                     fmt_tags(*tags);
@@ -222,10 +238,11 @@ fn main() {
                                                     tags,
                                                 } => {
                                                     if env.flags.urgency {
-                                                        env.set_value(
-                                                            &make,
-                                                            Value::Tags(tags),
-                                                        );
+                                                        if let Some(inner_value) = env.urgency.get_mut(&make) {
+                                                            (*inner_value) = tags;
+                                                        } else {
+                                                            env.urgency.insert(make.clone(), tags);
+                                                        }
                                                     }
                                                 }
                                             }
