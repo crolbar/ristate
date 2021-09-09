@@ -3,15 +3,9 @@ mod wayland;
 use crate::wayland::river_status_unstable_v1::{
     zriver_output_status_v1, zriver_seat_status_v1, zriver_status_manager_v1::ZriverStatusManagerV1,
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use wayland_client::protocol::{wl_output, wl_output::WlOutput, wl_seat, wl_seat::WlSeat};
 use wayland_client::{Display, GlobalManager, Main};
-
-#[derive(Debug)]
-enum Value {
-    Tags(u32),
-    ViewsTag(Vec<u32>),
-}
 
 #[derive(Debug)]
 struct Flags {
@@ -36,12 +30,13 @@ impl Flags {
     }
 }
 
+#[derive(Debug)]
 struct Env {
     flags: Flags,
     title: Option<String>,
-    tags: HashMap<String, u32>,
-    urgency: HashMap<String, u32>,
-    viewstag: HashMap<String, Vec<u32>>,
+    tags: BTreeMap<String, u32>,
+    urgency: BTreeMap<String, u32>,
+    viewstag: BTreeMap<String, Vec<u32>>,
     status_manager: Option<Main<ZriverStatusManagerV1>>,
 }
 
@@ -50,28 +45,10 @@ impl Env {
         Env {
             title: None,
             flags: configuration(),
-            viewstag: HashMap::new(),
-            urgency: HashMap::new(),
-            tags: HashMap::new(),
+            viewstag: BTreeMap::new(),
+            urgency: BTreeMap::new(),
+            tags: BTreeMap::new(),
             status_manager: None,
-        }
-    }
-    fn set_value(&mut self, key: &str, value: Value) {
-        match value {
-            Value::Tags( tags ) => {
-                if let Some(inner_value) = self.tags.get_mut(key) {
-                    (*inner_value) = tags;
-                } else {
-                    self.tags.insert(key.to_string(), tags);
-                }
-            }
-            Value::ViewsTag( tags ) => {
-                if let Some(inner_value) = self.viewstag.get_mut(key) {
-                    (*inner_value) = tags;
-                } else {
-                    self.viewstag.insert(key.to_string(), tags);
-                }
-            }
         }
     }
     fn fmt(&self) {
@@ -207,7 +184,11 @@ fn main() {
                                                     tags,
                                                 } => {
                                                     if env.flags.tags {
-                                                        env.set_value(&make, Value::Tags(tags));
+                                                        if let Some(inner_value) = env.tags.get_mut(&make) {
+                                                            (*inner_value) = tags;
+                                                        } else {
+                                                            env.tags.insert(make.clone(), tags);
+                                                        }
                                                     }
                                                 }
                                                 zriver_output_status_v1::Event::ViewTags {
@@ -228,10 +209,11 @@ fn main() {
                                                                 0
                                                             })
                                                             .collect();
-                                                        env.set_value(
-                                                            &make,
-                                                            Value::ViewsTag(tags),
-                                                        );
+                                                        if let Some(inner_value) = env.viewstag.get_mut(&make) {
+                                                            (*inner_value) = tags;
+                                                        } else {
+                                                            env.viewstag.insert(make.clone(), tags);
+                                                        }
                                                     }
                                                 }
                                                 zriver_output_status_v1::Event::UrgentTags {
@@ -241,6 +223,7 @@ fn main() {
                                                         if let Some(inner_value) = env.urgency.get_mut(&make) {
                                                             (*inner_value) = tags;
                                                         } else {
+                                                            // println!("{}", tags);
                                                             env.urgency.insert(make.clone(), tags);
                                                         }
                                                     }
