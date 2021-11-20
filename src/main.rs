@@ -223,7 +223,6 @@ fn main() {
                                                         if let Some(inner_value) = env.urgency.get_mut(&make) {
                                                             (*inner_value) = tags;
                                                         } else {
-                                                            // println!("{}", tags);
                                                             env.urgency.insert(make.clone(), tags);
                                                         }
                                                     }

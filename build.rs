@@ -11,9 +11,9 @@ fn generate(protocol_name: &str) {
     let out_dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src/wayland/"));
 
     let mut protocol_dir = String::from(concat!(env!("CARGO_MANIFEST_DIR"), "/protocol/"));
-    protocol_dir.push_str(protocol_name);
+    let protocol_file= protocol_name.replace("_", "-");
+    protocol_dir.push_str(&protocol_file);
     protocol_dir.push_str(".xml");
-    protocol_dir = protocol_dir.replace("_", "-");
 
     let protocol = Path::new(&protocol_dir);
     let mut protocol_file = protocol_name.to_string();
