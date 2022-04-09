@@ -287,18 +287,15 @@ fn configuration() -> Flags {
 }
 
 fn fmt_tags(tagmask: u32) {
-    let mut tag = 0;
-    let mut current: u32;
-    while {
-        current = 1 << tag;
-        tag == 32 || current <= tagmask
-    } {
-        tag += 1;
-        if current != tagmask && (tagmask / current) % 2 != 0 {
-            fmt_tags(tagmask - current);
-            print!(", ");
-            break;
+    let mut first = true;
+    for i in 0..32 {
+        if tagmask >> i & 1 == 1 {
+            if !first {
+                print!(", \"{}\"", i + 1);
+            } else {
+                print!("\"{}\"", i + 1);
+                first = false;
+            }
         }
     }
-    print!("\"{}\"", tag);
 }
