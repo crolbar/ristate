@@ -3,6 +3,8 @@ mod wayland;
 use crate::wayland::river_status_unstable_v1::{
     zriver_output_status_v1, zriver_seat_status_v1, zriver_status_manager_v1::ZriverStatusManagerV1,
 };
+use serde::ser::{SerializeSeq, Serializer};
+use serde::Serialize;
 use std::collections::BTreeMap;
 use wayland_client::protocol::{wl_output, wl_output::WlOutput, wl_seat, wl_seat::WlSeat};
 use wayland_client::{Display, GlobalManager, Main};
@@ -30,83 +32,44 @@ impl Flags {
     }
 }
 
-#[derive(Debug)]
+struct Tags(u32);
+
+#[derive(Serialize)]
 struct Env {
+    #[serde(skip)]
     flags: Flags,
+    #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
-    tags: BTreeMap<String, u32>,
-    urgency: BTreeMap<String, u32>,
-    viewstag: BTreeMap<String, Vec<u32>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tags: Option<BTreeMap<String, Tags>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    urgency: Option<BTreeMap<String, Tags>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    viewstag: Option<BTreeMap<String, Vec<u32>>>,
+    #[serde(skip)]
     status_manager: Option<Main<ZriverStatusManagerV1>>,
 }
 
 impl Env {
     fn new() -> Env {
+        let flags = configuration();
         Env {
             title: None,
-            flags: configuration(),
-            viewstag: BTreeMap::new(),
-            urgency: BTreeMap::new(),
-            tags: BTreeMap::new(),
+            tags: flags.tags.then(BTreeMap::new),
+            urgency: flags.urgency.then(BTreeMap::new),
+            viewstag: flags.viewstag.then(BTreeMap::new),
             status_manager: None,
+            flags,
         }
     }
+
     fn fmt(&self) {
-        if !self.tags.is_empty()
-        || !self.viewstag.is_empty()
-        || !self.urgency.is_empty()
-        || self.title.is_some() {
-            print!("{{");
-            let mut comma = false;
-            if !self.tags.is_empty() {
-                print!("\"tags\" : [");
-                let len = self.tags.len();
-                for (i, (key, tags)) in self.tags.iter().enumerate() {
-                    print!("{{{:?} : ", key);
-                    print!("[");
-                    fmt_tags(*tags);
-                    print!("]}}");
-                    if i < len - 1 { print!(", "); }
-                }
-                print!("]");
-                comma = true;
-            }
-            if !self.urgency.is_empty() {
-                print!("\"urgent\" : [");
-                let len = self.urgency.len();
-                for (i, (key, tags)) in self.urgency.iter().enumerate() {
-                    print!("{{{:?} : ", key);
-                    print!("[");
-                    fmt_tags(*tags);
-                    print!("]}}");
-                    if i < len - 1 { print!(", "); }
-                }
-                print!("]");
-                comma = true;
-            }
-            if !self.viewstag.is_empty() {
-                if comma { print!(", "); }
-                print!("\"viewstag\" : [");
-                let vlen = self.viewstag.len();
-                for (i, (key, tags)) in self.viewstag.iter().enumerate() {
-                    print!("{{{:?} : ", key);
-                    print!("[");
-                    let len = tags.len();
-                    for (i, tag) in tags.iter().enumerate() {
-                        print!("\"{}\"", tag);
-                        if i < len - 1 { print!(", "); }
-                    }
-                    print!("]}}");
-                    if i < vlen - 1 { print!(", "); }
-                }
-                print!("]");
-                comma = true;
-            }
-            if let Some(title) = self.title.as_ref() {
-                if comma { print!(", "); }
-                print!("\"title\" : {:?}", title);
-            }
-            println!("}}");
+        if self.title.is_some()
+            || self.tags.is_some()
+            || self.urgency.is_some()
+            || self.viewstag.is_some()
+        {
+            println!("{}", serde_json::to_string(self).unwrap());
         }
     }
 }
@@ -181,20 +144,25 @@ fn main() {
                                         if let Some(env) = env.get::<Env>() {
                                             match event {
                                                 zriver_output_status_v1::Event::FocusedTags {
-                                                    tags,
+                                                    tags: focused_tags,
                                                 } => {
-                                                    if env.flags.tags {
-                                                        if let Some(inner_value) = env.tags.get_mut(&make) {
-                                                            (*inner_value) = tags;
+                                                    if let Some(tags) = &mut env.tags {
+                                                        if let Some(inner_value) =
+                                                            tags.get_mut(&make)
+                                                        {
+                                                            (*inner_value) = Tags(focused_tags);
                                                         } else {
-                                                            env.tags.insert(make.clone(), tags);
+                                                            tags.insert(
+                                                                make.clone(),
+                                                                Tags(focused_tags),
+                                                            );
                                                         }
                                                     }
                                                 }
                                                 zriver_output_status_v1::Event::ViewTags {
                                                     tags,
                                                 } => {
-                                                    if env.flags.viewstag {
+                                                    if let Some(viewstag) = &mut env.viewstag {
                                                         let tags: Vec<u32> = tags[0..]
                                                             .chunks(4)
                                                             .map(|s| {
@@ -203,27 +171,32 @@ fn main() {
                                                                     u32::from_le_bytes(buf);
                                                                 for i in 0..32 {
                                                                     if 1 << i == tagmask {
-                                                                        return 1+i;
+                                                                        return 1 + i;
                                                                     }
                                                                 }
                                                                 0
                                                             })
                                                             .collect();
-                                                        if let Some(inner_value) = env.viewstag.get_mut(&make) {
+                                                        if let Some(inner_value) =
+                                                            viewstag.get_mut(&make)
+                                                        {
                                                             (*inner_value) = tags;
                                                         } else {
-                                                            env.viewstag.insert(make.clone(), tags);
+                                                            viewstag.insert(make.clone(), tags);
                                                         }
                                                     }
                                                 }
                                                 zriver_output_status_v1::Event::UrgentTags {
                                                     tags,
                                                 } => {
-                                                    if env.flags.urgency {
-                                                        if let Some(inner_value) = env.urgency.get_mut(&make) {
-                                                            (*inner_value) = tags;
+                                                    if let Some(urgency) = &mut env.urgency {
+                                                        if let Some(inner_value) =
+                                                            urgency.get_mut(&make)
+                                                        {
+                                                            (*inner_value) = Tags(tags);
                                                         } else {
-                                                            env.urgency.insert(make.clone(), tags);
+                                                            urgency
+                                                                .insert(make.clone(), Tags(tags));
                                                         }
                                                     }
                                                 }
@@ -262,13 +235,13 @@ fn configuration() -> Flags {
     loop {
         match args.next() {
             Some(flag) => match flag.as_str() {
-                "--seat" 		| "-s"		=> default.seat = args.next(),
-                "--output" 		| "-o"		=> default.output = args.next(),
-                "--urgency" 	| "-u"		=> default.urgency = true,
-                "--title" 		| "-w" 		=> default.title = true,
-                "--tags" 		| "-t"		=> default.tags = true,
-                "--views-tag" 	| "-vt"		=> default.viewstag = true,
-                "--help"		| "-h"		=> {
+                "--seat" | "-s" => default.seat = args.next(),
+                "--output" | "-o" => default.output = args.next(),
+                "--urgency" | "-u" => default.urgency = true,
+                "--title" | "-w" => default.title = true,
+                "--tags" | "-t" => default.tags = true,
+                "--views-tag" | "-vt" => default.viewstag = true,
+                "--help" | "-h" => {
                     print!("Usage: ristate [option]\n\n");
                     print!("  --tag | -t 			the focused tag\n");
                     print!("  --title | -w	   	 	the title of the focused view\n");
@@ -279,23 +252,24 @@ fn configuration() -> Flags {
                     std::process::exit(0);
                 }
                 _ => {}
-            }
-            None => break
+            },
+            None => break,
         }
     }
     default
 }
 
-fn fmt_tags(tagmask: u32) {
-    let mut first = true;
-    for i in 0..32 {
-        if tagmask >> i & 1 == 1 {
-            if !first {
-                print!(", \"{}\"", i + 1);
-            } else {
-                print!("\"{}\"", i + 1);
-                first = false;
+impl Serialize for Tags {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.0.count_ones() as usize))?;
+        for i in 0..32 {
+            if self.0 >> i & 1 == 1 {
+                seq.serialize_element(&format!("{}", i + 1))?;
             }
         }
+        seq.end()
     }
 }
