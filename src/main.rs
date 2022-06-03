@@ -1,6 +1,6 @@
-mod wayland;
+mod river_protocols;
 
-use crate::wayland::river_status_unstable_v1::{
+use river_protocols::{
     zriver_output_status_v1, zriver_seat_status_v1, zriver_status_manager_v1::ZriverStatusManagerV1,
 };
 use serde::ser::{SerializeSeq, Serializer};
