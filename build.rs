@@ -1,22 +1,14 @@
-extern crate wayland_scanner;
-
+use std::env::var;
 use std::path::Path;
 use wayland_scanner::{generate_code, Side};
 
-pub fn main() {
-    generate("river_status_unstable_v1");
-}
+fn main() {
+    let out_dir = var("OUT_DIR").unwrap();
+    let out_dir = Path::new(&out_dir);
 
-fn generate(protocol_name: &str) {
-    let out_dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src/wayland/"));
-
-    let mut protocol_dir = String::from(concat!(env!("CARGO_MANIFEST_DIR"), "/protocol/"));
-    protocol_dir.push_str(&protocol_name.replace("_", "-"));
-    protocol_dir.push_str(".xml");
-
-    let protocol = Path::new(&protocol_dir);
-    let mut protocol_file = protocol_name.to_string();
-    protocol_file.push_str(".rs");
-
-    generate_code(protocol, out_dir.join(protocol_file), Side::Client);
+    generate_code(
+        "./protocol/river-status-unstable-v1.xml",
+        out_dir.join("river-status-unstable-v1.rs"),
+        Side::Client,
+    );
 }
