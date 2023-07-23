@@ -15,6 +15,7 @@ struct Flags {
     title: bool,
     urgency: bool,
     viewstag: bool,
+    layout: bool,
     output: Option<String>,
     seat: Option<String>,
 }
@@ -26,6 +27,7 @@ impl Flags {
             title: false,
             urgency: false,
             viewstag: false,
+            layout: false,
             output: None,
             seat: None,
         }
@@ -38,6 +40,8 @@ struct Tags(u32);
 struct Env {
     #[serde(skip)]
     flags: Flags,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    layout: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -55,6 +59,7 @@ impl Env {
         let flags = configuration();
         Env {
             title: None,
+            layout: None,
             tags: flags.tags.then(BTreeMap::new),
             urgency: flags.urgency.then(BTreeMap::new),
             viewstag: flags.viewstag.then(BTreeMap::new),
@@ -68,6 +73,7 @@ impl Env {
             || self.tags.is_some()
             || self.urgency.is_some()
             || self.viewstag.is_some()
+            || self.layout.is_some()
         {
             println!("{}", serde_json::to_string(self).unwrap());
         }
@@ -200,6 +206,11 @@ fn main() {
                                                         }
                                                     }
                                                 }
+                                                zriver_output_status_v1::Event::LayoutName {
+                                                    name,
+                                                } => {
+                                                    env.layout = Some(name);
+                                                }
                                                 _ => {}
                                             }
                                         }
@@ -241,6 +252,7 @@ fn configuration() -> Flags {
                 "--urgency" | "-u" => default.urgency = true,
                 "--title" | "-w" => default.title = true,
                 "--tags" | "-t" => default.tags = true,
+                "--layout" | "-l" => default.layout = true,
                 "--views-tag" | "-vt" => default.viewstag = true,
                 "--help" | "-h" => {
                     print!("Usage: ristate [option]\n\n");
@@ -250,6 +262,7 @@ fn configuration() -> Flags {
                     print!("  --views-tag | -vt    		the tag of all views\n");
                     print!("  --seat | -s <string>  	select the seat\n");
                     print!("  --output | -o <string> 	select the output\n");
+                    print!("  --layout | -l <string> 	display the name of the layout\n");
                     std::process::exit(0);
                 }
                 _ => {}
