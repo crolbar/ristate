@@ -11,10 +11,10 @@ use wayland_client::{Display, GlobalManager, Main};
 
 #[derive(Debug)]
 struct Flags {
-    tags: bool,
-    title: bool,
+    focused_tags: bool,
+    focused_view: bool,
     urgency: bool,
-    viewstag: bool,
+    view_tags: bool,
     layout: bool,
     output: Option<String>,
     seat: Option<String>,
@@ -23,10 +23,10 @@ struct Flags {
 impl Flags {
     fn default() -> Flags {
         Flags {
-            tags: false,
-            title: false,
+            focused_tags: false,
+            focused_view: false,
             urgency: false,
-            viewstag: false,
+            view_tags: false,
             layout: false,
             output: None,
             seat: None,
@@ -43,13 +43,13 @@ struct Env {
     #[serde(skip_serializing_if = "Option::is_none")]
     layout: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    title: Option<String>,
+    focused_view: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    tags: Option<BTreeMap<String, Tags>>,
+    focused_tags: Option<BTreeMap<String, Tags>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     urgency: Option<BTreeMap<String, Tags>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    viewstag: Option<BTreeMap<String, Vec<u32>>>,
+    view_tags: Option<BTreeMap<String, Vec<u32>>>,
     #[serde(skip)]
     status_manager: Option<Main<ZriverStatusManagerV1>>,
 }
@@ -58,21 +58,21 @@ impl Env {
     fn new() -> Env {
         let flags = configuration();
         Env {
-            title: None,
+            focused_view: None,
             layout: None,
-            tags: flags.tags.then(BTreeMap::new),
+            focused_tags: flags.focused_tags.then(BTreeMap::new),
             urgency: flags.urgency.then(BTreeMap::new),
-            viewstag: flags.viewstag.then(BTreeMap::new),
+            view_tags: flags.view_tags.then(BTreeMap::new),
             status_manager: None,
             flags,
         }
     }
 
     fn fmt(&self) {
-        if self.title.is_some()
-            || self.tags.is_some()
+        if self.focused_view.is_some()
+            || self.focused_tags.is_some()
             || self.urgency.is_some()
-            || self.viewstag.is_some()
+            || self.view_tags.is_some()
             || self.layout.is_some()
         {
             println!("{}", serde_json::to_string(self).unwrap());
@@ -103,7 +103,7 @@ fn main() {
                 seat.quick_assign(move |seat, event, mut env| match event {
                     wl_seat::Event::Name { name } => {
                         if let Some(env) = env.get::<Env>() {
-                            if env.flags.title
+                            if env.flags.focused_view
                                 && (env.flags.seat.is_none()
                                     || name.eq(env.flags.seat.as_ref().unwrap()))
                             {
@@ -113,7 +113,7 @@ fn main() {
                                         move |_, event, mut env| match event {
                                             zriver_seat_status_v1::Event::FocusedView { title } => {
                                                 if let Some(env) = env.get::<Env>() {
-                                                    env.title = Some(title);
+                                                    env.focused_view = Some(title);
                                                 }
                                             }
                                             _ => {}
@@ -152,7 +152,7 @@ fn main() {
                                                 zriver_output_status_v1::Event::FocusedTags {
                                                     tags: focused_tags,
                                                 } => {
-                                                    if let Some(tags) = &mut env.tags {
+                                                    if let Some(tags) = &mut env.focused_tags {
                                                         if let Some(inner_value) =
                                                             tags.get_mut(&make)
                                                         {
@@ -168,7 +168,7 @@ fn main() {
                                                 zriver_output_status_v1::Event::ViewTags {
                                                     tags,
                                                 } => {
-                                                    if let Some(viewstag) = &mut env.viewstag {
+                                                    if let Some(viewstag) = &mut env.view_tags {
                                                         let tags: Vec<u32> = tags[0..]
                                                             .chunks(4)
                                                             .map(|s| {
@@ -250,19 +250,19 @@ fn configuration() -> Flags {
                 "--seat" | "-s" => default.seat = args.next(),
                 "--output" | "-o" => default.output = args.next(),
                 "--urgency" | "-u" => default.urgency = true,
-                "--title" | "-w" => default.title = true,
-                "--tags" | "-t" => default.tags = true,
+                "--focused-view" | "-f" => default.focused_view = true,
+                "--focused-tags" | "-t" => default.focused_tags = true,
                 "--layout" | "-l" => default.layout = true,
-                "--views-tag" | "-vt" => default.viewstag = true,
+                "--view-tags" | "-vt" => default.view_tags = true,
                 "--help" | "-h" => {
                     print!("Usage: ristate [option]\n\n");
-                    print!("  --tag | -t 			the focused tag\n");
-                    print!("  --title | -w	   	 	the title of the focused view\n");
-                    print!("  --urgency | -u 		urgent tag\n");
-                    print!("  --views-tag | -vt    		the tag of all views\n");
-                    print!("  --seat | -s <string>  	select the seat\n");
-                    print!("  --output | -o <string> 	select the output\n");
-                    print!("  --layout | -l <string> 	display the name of the layout\n");
+                    print!("  --focused-tags | -t   the focused tag\n");
+                    print!("  --focused-view | -f	the title of the focused view\n");
+                    print!("  --urgency | -u        urgent tag\n");
+                    print!("  --view-tags | -vt         the tag of all views\n");
+                    print!("  --seat | -s <string>      select the seat\n");
+                    print!("  --output | -o <string>    select the output\n");
+                    print!("  --layout | -l <string>    display the name of the layout\n");
                     std::process::exit(0);
                 }
                 _ => {}
