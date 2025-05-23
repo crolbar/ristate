@@ -4,5 +4,6 @@ rustPlatform.buildRustPackage {
   version = "unstable-2024-09-03";
   src = ./.;
 
-  cargoHash = "sha256-7hwgqVbaaQp4HNegGiFqDb7d2xZP9+99a+aq+6teHxw=";
+  useFetchCargoVendor = true;
+  cargoHash = "sha256-oyKgwVHcyRIQ4nRJaAX0ooibKp7hYJdmxyaH09cw1pA=";
 }
